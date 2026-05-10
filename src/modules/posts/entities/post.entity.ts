@@ -1,3 +1,4 @@
+import { Comment } from 'src/modules/comments/entities/comment.entity';
 import { Like } from 'src/modules/likes/entities/like.entity';
 import { User } from 'src/modules/users/entities/user.entity';
 import {

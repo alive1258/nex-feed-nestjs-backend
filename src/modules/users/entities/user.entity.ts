@@ -1,9 +1,13 @@
 import { Exclude } from 'class-transformer';
+import { Comment } from 'src/modules/comments/entities/comment.entity';
+import { Like } from 'src/modules/likes/entities/like.entity';
+import { Post } from 'src/modules/posts/entities/post.entity';
 import {
   Column,
   CreateDateColumn,
   Entity,
   Index,
+  OneToMany,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
@@ -32,6 +36,15 @@ export class User {
   @Column({ type: 'varchar', length: 255 })
   @Exclude()
   password: string;
+
+  @OneToMany(() => Post, (post) => post.user)
+  posts: Post[];
+
+  @OneToMany(() => Comment, (comment) => comment.user)
+  comments: Comment[];
+
+  @OneToMany(() => Like, (like) => like.user)
+  likes: Like[];
 
   @Column({ default: 0 })
   token_version: number;

@@ -1,4 +1,5 @@
-import { Post } from '@nestjs/common';
+import { Comment } from 'src/modules/comments/entities/comment.entity';
+import { Post } from 'src/modules/posts/entities/post.entity';
 import { User } from 'src/modules/users/entities/user.entity';
 import {
   Column,
