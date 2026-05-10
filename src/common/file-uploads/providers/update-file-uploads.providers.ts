@@ -1,126 +1,6 @@
-// // import { HttpService } from '@nestjs/axios';
-// // import { BadRequestException, Injectable } from '@nestjs/common';
-// // import { ConfigService } from '@nestjs/config';
-// // import { Express } from 'express';
-// // import FormData from 'form-data';
-// // import { lastValueFrom } from 'rxjs';
-
-// // @Injectable()
-// // export class UpdateFileUploadsProvider {
-// //   constructor(
-// //     private readonly httpService: HttpService,
-// //     private readonly configService: ConfigService,
-// //   ) {}
-
-// //   public async handleUpdateFileUploads(
-// //     currentFile: Express.Multer.File,
-// //     oldFile: string,
-// //   ): Promise<string> {
-// //     if (!currentFile?.buffer) {
-// //       return oldFile;
-// //     }
-
-// //     try {
-// //       const imageUploadUrl = this.configService.get<string>(
-// //         'appConfig.imageUploadUrl',
-// //       );
-
-// //       if (!imageUploadUrl) {
-// //         throw new BadRequestException('Image upload URL not configured');
-// //       }
-
-// //       const formData = new FormData();
-
-// //       formData.append('newFile', currentFile.buffer, {
-// //         filename: currentFile.originalname,
-// //         contentType: currentFile.mimetype,
-// //       });
-
-// //       formData.append('oldFile', oldFile);
-
-// //       const response = await lastValueFrom(
-// //         this.httpService.post<{ name: string }>(
-// //           `${imageUploadUrl}/update`,
-// //           formData,
-// //           {
-// //             headers: formData.getHeaders(),
-// //           },
-// //         ),
-// //       );
-
-// //       const updatedName = response.data?.name;
-
-// //       if (!updatedName) {
-// //         throw new BadRequestException(
-// //           'The response did not contain a valid photo name.',
-// //         );
-// //       }
-
-// //       return updatedName;
-// //     } catch (err: unknown) {
-// //       if (err instanceof Error) {
-// //         throw new BadRequestException(`Image update failed: ${err.message}`);
-// //       }
-// //       throw new BadRequestException('Image update failed');
-// //     }
-// //   }
-// // }
-
-// import { BadRequestException, Inject, Injectable } from '@nestjs/common';
-// import { v2 as Cloudinary, UploadApiResponse } from 'cloudinary';
-
-// @Injectable()
-// export class UpdateFileUploadsProvider {
-//   constructor(
-//     @Inject('CLOUDINARY')
-//     private readonly cloudinary: typeof Cloudinary,
-//   ) {}
-
-//   async handleUpdateFileUploads(
-//     currentFile: Express.Multer.File,
-//     oldFile: string,
-//   ): Promise<string> {
-//     if (!currentFile?.buffer) {
-//       return oldFile;
-//     }
-
-//     try {
-//       if (oldFile) {
-//         const publicId = oldFile.split('/').pop()?.split('.')[0];
-//         if (publicId) {
-//           await this.cloudinary.uploader.destroy(`uploads/${publicId}`);
-//         }
-//       }
-
-//       return await new Promise<string>((resolve, reject) => {
-//         this.cloudinary.uploader
-//           .upload_stream(
-//             { folder: 'uploads' },
-//             (
-//               error: Error | undefined,
-//               result: UploadApiResponse | undefined,
-//             ) => {
-//               if (error) return reject(error);
-
-//               if (!result || !result.secure_url) {
-//                 return reject(
-//                   new BadRequestException('Cloudinary upload failed'),
-//                 );
-//               }
-
-//               resolve(result.secure_url);
-//             },
-//           )
-//           .end(currentFile.buffer);
-//       });
-//     } catch (error: any) {
-//       throw new BadRequestException(`Image update failed: ${error.message}`);
-//     }
-//   }
-// }
-
 import { BadRequestException, Inject, Injectable } from '@nestjs/common';
 import { v2 as Cloudinary, UploadApiResponse } from 'cloudinary';
+import { MulterFile } from 'src/common/types/file.types';
 
 @Injectable()
 export class UpdateFileUploadsProvider {
@@ -130,44 +10,96 @@ export class UpdateFileUploadsProvider {
   ) {}
 
   async handleUpdateFileUploads(
-    currentFile: Express.Multer.File,
+    currentFile: MulterFile, // Changed from Express.Multer.File
     oldFile: string,
   ): Promise<string> {
+    // If no new file provided, keep the old file
     if (!currentFile?.buffer) {
       return oldFile;
     }
 
     try {
+      // Delete old file from Cloudinary if it exists
       if (oldFile) {
-        const publicId = oldFile.split('/').pop()?.split('.')[0];
+        const publicId = this.extractPublicIdFromUrl(oldFile);
         if (publicId) {
-          await this.cloudinary.uploader.destroy(`uploads/${publicId}`);
+          const deletionResult =
+            await this.cloudinary.uploader.destroy(publicId);
+          console.log('Old file deletion result:', deletionResult);
         }
       }
 
-      return await new Promise<string>((resolve, reject) => {
-        this.cloudinary.uploader
-          .upload_stream(
-            { folder: 'uploads' },
-            (
-              error: Error | undefined,
-              result: UploadApiResponse | undefined,
-            ) => {
-              if (error) return reject(error);
-
-              if (!result || !result.secure_url) {
-                return reject(
-                  new BadRequestException('Cloudinary upload failed'),
-                );
-              }
-
-              resolve(result.secure_url);
-            },
-          )
-          .end(currentFile.buffer);
-      });
+      // Upload new file
+      return await this.uploadToCloudinary(currentFile);
     } catch (error: any) {
+      console.error('File update error:', error);
       throw new BadRequestException(`Image update failed: ${error.message}`);
+    }
+  }
+
+  /**
+   * Upload file to Cloudinary
+   */
+  private async uploadToCloudinary(file: MulterFile): Promise<string> {
+    return new Promise<string>((resolve, reject) => {
+      const uploadStream = this.cloudinary.uploader.upload_stream(
+        {
+          folder: 'social_media_posts', // Better to use a specific folder name
+          allowed_formats: ['jpg', 'jpeg', 'png', 'gif', 'webp'],
+          transformation: [{ quality: 'auto' }, { fetch_format: 'auto' }],
+        },
+        (error: Error | undefined, result: UploadApiResponse | undefined) => {
+          if (error) {
+            return reject(
+              new BadRequestException(`Cloudinary error: ${error.message}`),
+            );
+          }
+
+          if (!result || !result.secure_url) {
+            return reject(
+              new BadRequestException(
+                'Cloudinary upload failed - no URL returned',
+              ),
+            );
+          }
+
+          resolve(result.secure_url);
+        },
+      );
+
+      uploadStream.end(file.buffer);
+    });
+  }
+
+  /**
+   * Extract public ID from Cloudinary URL
+   * Example URL: https://res.cloudinary.com/demo/image/upload/v1234567890/social_media_posts/abc123.jpg
+   */
+  private extractPublicIdFromUrl(url: string): string | null {
+    try {
+      // Find '/upload/' in the URL
+      const uploadIndex = url.indexOf('/upload/');
+      if (uploadIndex === -1) return null;
+
+      // Get everything after '/upload/'
+      let afterUpload = url.substring(uploadIndex + 8);
+
+      // Remove version prefix (e.g., 'v1234567890/')
+      const versionMatch = afterUpload.match(/^v\d+\//);
+      if (versionMatch) {
+        afterUpload = afterUpload.substring(versionMatch[0].length);
+      }
+
+      // Remove file extension
+      const lastDotIndex = afterUpload.lastIndexOf('.');
+      if (lastDotIndex !== -1) {
+        afterUpload = afterUpload.substring(0, lastDotIndex);
+      }
+
+      return afterUpload;
+    } catch (error) {
+      console.error('Error extracting public ID:', error);
+      return null;
     }
   }
 }

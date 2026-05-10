@@ -9,6 +9,15 @@ export enum Permission {
   USER_DELETE = 'user:delete',
   USER_MANAGE = 'user:*',
 
+  POSTS_CREATE = 'posts:create',
+  POSTS_VIEW = 'posts:view',
+  POSTS_UPDATE = 'posts:update',
+  POSTS_DELETE = 'posts:delete',
+
+  POSTS_LIKE = 'posts:like',
+  POSTS_COMMENT = 'posts:comment',
+  POSTS_REPLY = 'posts:reply',
+
   /* =========================
      Profile
   ========================= */

@@ -1,80 +1,15 @@
-// import { HttpService } from '@nestjs/axios';
-// import {
-//   BadRequestException,
-//   Injectable,
-//   NotFoundException,
-// } from '@nestjs/common';
-// import { ConfigService } from '@nestjs/config';
-// import FormData from 'form-data';
-// import { lastValueFrom } from 'rxjs';
-
-// @Injectable()
-// export class FileUploadsProvider {
-//   constructor(
-//     private readonly httpService: HttpService,
-//     private readonly configService: ConfigService,
-//   ) {}
-
-//   public async handleFileUploads(
-//     files: Express.Multer.File[],
-//   ): Promise<string[]> {
-//     if (!files || files.length === 0) {
-//       throw new NotFoundException('No file(s) provided');
-//     }
-
-//     try {
-//       const uploadPromises = files.map(async (file) => {
-//         //  ALWAYS USE originalname
-//         const filename = file.originalname;
-
-//         //  MEMORY STORAGE (recommended)
-//         if (file.buffer) {
-//           const formData = new FormData();
-//           formData.append('file', file.buffer, {
-//             filename,
-//             contentType: file.mimetype,
-//           });
-
-//           const imageUploadUrl = this.configService.get<string>(
-//             'appConfig.imageUploadUrl',
-//           );
-
-//           if (!imageUploadUrl) {
-//             throw new BadRequestException('Image upload URL not configured');
-//           }
-
-//           const response = await lastValueFrom(
-//             this.httpService.post<{ name: string }>(
-//               `${imageUploadUrl}/upload`,
-//               formData,
-//               { headers: formData.getHeaders() },
-//             ),
-//           );
-
-//           return response.data.name;
-//         }
-
-//         //  if buffer is missing → config error
-//         throw new BadRequestException('File buffer missing');
-//       });
-
-//       return await Promise.all(uploadPromises);
-//     } catch (err) {
-//       if (err instanceof Error) {
-//         throw new BadRequestException(`File upload error: ${err.message}`);
-//       }
-//       throw new BadRequestException('File upload error');
-//     }
-//   }
-// }
-
 import {
   BadRequestException,
   Inject,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { v2 as Cloudinary, UploadApiResponse } from 'cloudinary';
+import {
+  v2 as Cloudinary,
+  UploadApiErrorResponse,
+  UploadApiResponse,
+} from 'cloudinary';
+import { MulterFile } from 'src/common/types/file.types';
 
 @Injectable()
 export class FileUploadsProvider {
@@ -83,9 +18,14 @@ export class FileUploadsProvider {
     private readonly cloudinary: typeof Cloudinary,
   ) {}
 
-  async handleFileUploads(files: Express.Multer.File[]): Promise<string[]> {
+  async handleFileUploads(files: MulterFile[]): Promise<string[]> {
     if (!files || files.length === 0) {
       throw new NotFoundException('No file(s) provided');
+    }
+
+    // Validate each file
+    for (const file of files) {
+      this.validateFile(file);
     }
 
     try {
@@ -95,31 +35,73 @@ export class FileUploadsProvider {
         }
 
         return new Promise<string>((resolve, reject) => {
-          this.cloudinary.uploader
-            .upload_stream(
-              { folder: 'uploads' },
-              (
-                error: Error | undefined,
-                result: UploadApiResponse | undefined,
-              ) => {
-                if (error) return reject(error);
+          const uploadStream = this.cloudinary.uploader.upload_stream(
+            {
+              folder: 'social_media_posts',
+              allowed_formats: ['jpg', 'jpeg', 'png', 'gif', 'webp'],
+              transformation: [{ quality: 'auto' }, { fetch_format: 'auto' }],
+              resource_type: 'auto',
+            },
+            (
+              error: UploadApiErrorResponse | undefined,
+              result: UploadApiResponse | undefined,
+            ) => {
+              if (error) {
+                console.error('Cloudinary upload error:', error);
+                return reject(
+                  new BadRequestException(`Cloudinary error: ${error.message}`),
+                );
+              }
 
-                if (!result || !result.secure_url) {
-                  return reject(
-                    new BadRequestException('Cloudinary upload failed'),
-                  );
-                }
+              if (!result || !result.secure_url) {
+                return reject(
+                  new BadRequestException(
+                    'Cloudinary upload failed - no URL returned',
+                  ),
+                );
+              }
 
-                resolve(result.secure_url);
-              },
-            )
-            .end(file.buffer);
+              resolve(result.secure_url);
+            },
+          );
+
+          uploadStream.end(file.buffer);
         });
       });
 
-      return await Promise.all(uploads);
+      const uploadedUrls = await Promise.all(uploads);
+      return uploadedUrls;
     } catch (error: any) {
+      console.error('File upload error:', error);
       throw new BadRequestException(`File upload error: ${error.message}`);
+    }
+  }
+
+  /**
+   * Validate file type and size
+   */
+  private validateFile(file: MulterFile): void {
+    // Allowed MIME types
+    const allowedMimeTypes = [
+      'image/jpeg',
+      'image/jpg',
+      'image/png',
+      'image/gif',
+      'image/webp',
+    ];
+
+    if (!allowedMimeTypes.includes(file.mimetype)) {
+      throw new BadRequestException(
+        `Invalid file type: ${file.mimetype}. Allowed types: ${allowedMimeTypes.join(', ')}`,
+      );
+    }
+
+    // Max file size: 10MB
+    const maxSize = 10 * 1024 * 1024; // 10MB
+    if (file.size > maxSize) {
+      throw new BadRequestException(
+        `File size too large: ${(file.size / (1024 * 1024)).toFixed(2)}MB. Maximum allowed: ${maxSize / (1024 * 1024)}MB`,
+      );
     }
   }
 }

@@ -9,9 +9,13 @@ export const RoleHierarchy: Record<Role, readonly Role[]> = {
 // Role-based permissions definition. role hierarchy (inheritance) SUPER_ADMIN > ADMIN > MANAGER > PREMIUM_USER > USER
 export const RoleBasedPermissions: Record<Role, Permission[]> = {
   [Role.ADMIN]: [
-    // Permission.USER_MANAGE,
-    // Permission.CONTENT_MANAGE,
-    // Permission.PRODUCT_MANAGE,
-    // Permission.MEDIA_MANAGE,
+    Permission.POSTS_CREATE,
+    Permission.POSTS_VIEW,
+    Permission.POSTS_UPDATE,
+    Permission.POSTS_DELETE,
+
+    Permission.POSTS_LIKE,
+    Permission.POSTS_COMMENT,
+    Permission.POSTS_REPLY,
   ],
 };
