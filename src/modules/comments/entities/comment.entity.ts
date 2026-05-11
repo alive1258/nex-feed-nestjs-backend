@@ -21,7 +21,7 @@ export class Comment {
   content: string;
 
   @Column({ nullable: true, name: 'parent_comment_id' })
-  parentCommentId: string;
+  parentCommentId: string | null;
 
   @ManyToOne(() => User, (user) => user.comments, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'user_id' })
@@ -41,7 +41,7 @@ export class Comment {
     onDelete: 'CASCADE',
   })
   @JoinColumn({ name: 'parent_comment_id' })
-  parentComment: Comment;
+  parentComment: Comment | null;
 
   @OneToMany(() => Comment, (comment) => comment.parentComment)
   replies: Comment[];

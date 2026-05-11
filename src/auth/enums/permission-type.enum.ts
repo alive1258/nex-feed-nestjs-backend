@@ -18,6 +18,11 @@ export enum Permission {
   POSTS_COMMENT = 'posts:comment',
   POSTS_REPLY = 'posts:reply',
 
+  COMMENTS_CREATE = 'comments.create',
+  COMMENTS_VIEW = 'comments.view',
+  COMMENTS_UPDATE = 'comments.update',
+  COMMENTS_DELETE = 'comments.delete',
+
   /* =========================
      Profile
   ========================= */

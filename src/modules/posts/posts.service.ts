@@ -13,6 +13,7 @@ import { FileUploadsService } from 'src/common/file-uploads/file-uploads.service
 import { DataQueryService } from 'src/common/data-query/data-query.service';
 import { Request } from 'express';
 import { MulterFile } from 'src/common/types/file.types';
+import { Comment } from '../comments/entities/comment.entity';
 
 @Injectable()
 export class PostsService {
@@ -62,36 +63,118 @@ export class PostsService {
   /**
    * Get feed posts (public + user's private posts)
    */
+  // src/modules/posts/posts.service.ts
+  private buildCommentTree(
+    comments: Comment[],
+    parentId: string | null = null,
+  ): any[] {
+    return comments
+      .filter((comment) => comment.parentCommentId === parentId)
+      .map((comment) => ({
+        id: comment.id,
+        content: comment.content,
+        userId: comment.userId,
+        createdAt: comment.createdAt,
+
+        commentReplies: this.buildCommentTree(comments, comment.id),
+      }));
+  }
+
   async findAll(
     req: Request,
     page: number = 1,
     limit: number = 20,
-  ): Promise<{ posts: Post[]; total: number }> {
+  ): Promise<{ posts: any[]; total: number }> {
     const userId = req?.user?.sub;
     const skip = (page - 1) * limit;
 
-    // Build query conditions
-    let whereConditions: FindOptionsWhere<Post>[] = [
-      { privacy: PostPrivacy.PUBLIC },
-    ];
+    if (!userId) {
+      return { posts: [], total: 0 };
+    }
 
-    // If user is authenticated, include their private posts
-    if (userId) {
-      whereConditions.push({
+    const whereConditions: FindOptionsWhere<Post>[] = [
+      { privacy: PostPrivacy.PUBLIC },
+      {
         privacy: PostPrivacy.PRIVATE,
         userId: String(userId),
-      });
-    }
+      },
+    ];
 
     const [posts, total] = await this.postRepository.findAndCount({
       where: whereConditions,
+
       relations: ['user', 'comments', 'likes'],
-      order: { createdAt: 'DESC' },
+
+      order: {
+        createdAt: 'DESC',
+      },
+
       skip,
       take: limit,
+
+      select: {
+        id: true,
+        content: true,
+        image: true,
+        privacy: true,
+        userId: true,
+        createdAt: true,
+        updatedAt: true,
+
+        user: {
+          id: true,
+          first_name: true,
+          last_name: true,
+          email: true,
+          role: true,
+        },
+
+        comments: {
+          id: true,
+          content: true,
+          userId: true,
+          createdAt: true,
+          parentCommentId: true,
+        },
+
+        likes: {
+          id: true,
+          userId: true,
+        },
+      },
     });
 
-    return { posts, total };
+    const transformedPosts = posts.map((post) => ({
+      id: post.id,
+      content: post.content,
+      image: post.image,
+      privacy: post.privacy,
+
+      userId: post.userId,
+
+      user: post.user,
+
+      comments: this.buildCommentTree(post.comments || []),
+
+      likes: post.likes || [],
+
+      likeCount: post.likes?.length || 0,
+
+      commentCount:
+        post.comments?.filter((comment) => !comment.parentCommentId).length ||
+        0,
+
+      isLikedByCurrentUser:
+        post.likes?.some((like) => like.userId === String(userId)) || false,
+
+      createdAt: post.createdAt,
+      updatedAt: post.updatedAt,
+    }));
+
+    return {
+      posts: transformedPosts,
+      total,
+    };
   }
 
   /**
