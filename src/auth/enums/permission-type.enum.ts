@@ -23,6 +23,10 @@ export enum Permission {
   COMMENTS_UPDATE = 'comments.update',
   COMMENTS_DELETE = 'comments.delete',
 
+  LIKES_CREATE = 'likes.create',
+  LIKES_VIEW = 'likes.view',
+  LIKES_DELETE = 'likes.delete',
+
   /* =========================
      Profile
   ========================= */

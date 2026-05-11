@@ -19,6 +19,10 @@ export const RoleBasedPermissions: Record<Role, Permission[]> = {
     Permission.COMMENTS_UPDATE,
     Permission.COMMENTS_DELETE,
 
+    Permission.LIKES_CREATE,
+    Permission.LIKES_VIEW,
+    Permission.LIKES_DELETE,
+
     Permission.POSTS_LIKE,
     Permission.POSTS_COMMENT,
     Permission.POSTS_REPLY,
